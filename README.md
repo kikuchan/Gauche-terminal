@@ -34,7 +34,7 @@ This module contains terminal.* modules.
 * Type of return value: \<procedure\>, (capability-symbols receiver)
 
 ```scm
-(define TERM (load-terminal-capability)) ; => load (terminfo-entry-path :term (sys-getenv "TERM"))
+(define TERM (load-terminal-capability))
 
 (TERM 'true-booleans)     ; => get true-booleans  symbol
 (TERM 'false-booleans)    ; => get false-booleans symbol
@@ -43,7 +43,8 @@ This module contains terminal.* modules.
 (TERM 'clear-screen)  ; => get clear_screen escape sequence
 
 (load-terminal-capability :path "~/.terminfo"); => load "~/.terminfo"
-(load-terminfo-entry :term "ansi"); => load (terminfo-entry-path :term "ansi")
+(load-terminfo-entry :term 'ansi); => load the terminfo entry file of ansi
+(load-termcap-source :term 'cygwin); => load terminal capabilities of cygwin, from termcap source
 ```
 
 ## terminal.terminfo
@@ -70,22 +71,23 @@ This class is wrapping 'struct winsize'.
 **Instance Variable of <winsize>:** pixel.x  => ws_xpixel of 'struct winsize'    
 **Instance Variable of <winsize>:** pixel.y  => ws_ypixel of 'struct winsize'    
 
-### load-winsize port-or-fd
+### load-winsize :optional port-or-fd
 * call ioctl with TIOCGWINSZ to port-or-fd
+* Defualt port-or-fd value is (current-input-port)
 * Type of return value: \<winsize\>
 
-### read-winsize port-or-fd
+### read-winsize :optional port-or-fd
 * call ioctl with TIOCGWINSZ to port-or-fd
 * Type of return value: \<pair\>
 * Return value format: ```(size.row . size.col)```
 
-### load-winsize! port-or-fd ws
+### load-winsize! ws :optional port-or-fd
 * call ioctl with TIOCGWINSZ and ws, to port-or-fd
 * Destructively modifies winsize
 * Type of return value: \<boolean\>
 * success => #t, failure => #f
 
-### set-winsize port-or-fd ws
+### set-winsize ws :optional port-or-fd
 * call ioctl with TIOCSWINSZ and ws, to port-or-fd
 * Type of return value: \<boolean\>
 * success => #t, failure => #f

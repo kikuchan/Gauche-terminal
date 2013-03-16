@@ -70,7 +70,7 @@
                         (ref (-> (SCM_WINSIZE_DATA obj) ws) ws_row)
                         (ref (-> (SCM_WINSIZE_DATA obj) ws) ws_col))))
 
- (define-cproc load-winsize (port-or-fd::<port>) :: <winsize>
+ (define-cproc load-winsize (:optional (port-or-fd::<port> (current-input-port))) :: <winsize>
    VMDECL
    (LOCK port-or-fd)
    (let* ([fd::int (Scm_GetPortFd (SCM_OBJ port-or-fd) FALSE)]
@@ -79,7 +79,7 @@
      (UNLOCK port-or-fd)
      (result t)))
 
- (define-cproc read-winsize (port-or-fd::<port>) :: <pair>
+ (define-cproc read-winsize (:optional (port-or-fd::<port> (current-input-port))) :: <pair>
    VMDECL
    (LOCK port-or-fd)
    (let* ([fd::int (Scm_GetPortFd (SCM_OBJ port-or-fd) FALSE)]
@@ -89,7 +89,7 @@
      (return (Scm_Cons (Scm_MakeIntegerFromUI (ref (-> t ws) ws_row))
                        (Scm_MakeIntegerFromUI (ref (-> t ws) ws_col))))))
  
- (define-cproc load-winsize! (port-or-fd::<port> t::<winsize>) :: <boolean>
+ (define-cproc load-winsize! (t::<winsize> :optional (port-or-fd::<port> (current-input-port))) :: <boolean>
    VMDECL
    (LOCK port-or-fd)
    (let* ([fd::int (Scm_GetPortFd (SCM_OBJ port-or-fd) FALSE)]
@@ -97,7 +97,7 @@
      (UNLOCK port-or-fd)
      (if (< rv 0) (result 0) (result 1))))
 
- (define-cproc set-winsize (port-or-fd::<port> t::<winsize>) :: <boolean>
+ (define-cproc set-winsize (t::<winsize> :optional (port-or-fd::<port> (current-input-port))) :: <boolean>
    VMDECL
    (LOCK port-or-fd)
    (let* ([fd::int (Scm_GetPortFd (SCM_OBJ port-or-fd) FALSE)]
