@@ -17,6 +17,7 @@
   (use srfi-1)
   (use srfi-11)
   (use srfi-13)
+  (use terminal.capability)
   (export load-termcap-source)
   )
 (select-module terminal.termcap)
@@ -553,10 +554,7 @@
 ;;; Utility 
 ;;;
 
-(define (%flush-line iport)
-  (until ((^[x] (or (char=? x #\newline) (eof-object? x))) (read-char iport))))
-
-(define (string-drop-last s)
+(define (%string-drop-last s)
   (string-drop-right s 1))
 
 
@@ -582,7 +580,7 @@
              (error #`"Can't find terminal capabilities of ',term'.")]
             [(char-whitespace? head) (loop)]
             [(or (char=? head #\:) (char=? head #\#))
-             (begin (%flush-line iport) (loop))]
+             (begin (read-line iport) (loop))] ; flush the line
             [else
              (let1 terminal-types 
                    (let loop2 ([label (list head)])
@@ -684,7 +682,7 @@
   (define (append-backslash lst) ; for "\\:"
     (cond [(null? lst) '()]
           [(and (rxmatch #/(^|[^\\\^])\\$/ (car lst)) (pair? (cdr lst)))
-           (cons (string-append (string-drop-last (car lst)) (cadr lst))
+           (cons (string-append (%string-drop-last (car lst)) (cadr lst))
                  (append-backslash (cddr lst)))]
           [(cons (car lst) (append-backslash (cdr lst)))]))
   (let loop ([capinfo '()])
@@ -731,7 +729,7 @@
           (if (and (pair? lastobj) (eq? (car lastobj) 'tc))
               ;; recursive loading
               (let1 cancel
-                    (map ($ string->symbol $ xstring-drop-right $ symbol->string $)
+                    (map ($ string->symbol $ %string-drop-last $ symbol->string $)
                       (take-while
                        (^[obj] (and (symbol? obj)
                                     (string-suffix? "@" (symbol->string obj))))
@@ -779,14 +777,13 @@
                                     (push! capability-alist (cons sym #f)))
                              )))
           (let1 table-of-capabilities (alist->hash-table capability-alist)
-            (lambda (sym)
-              (case sym
-                [(true-booleans)  true-booleans]
-                [(false-booleans) false-booleans]
-                [(available-numbers)  available-numbers]
-                [(available-strings)  available-strings]
-                [else (ref table-of-capabilities sym (undefined))]))
-            )))))
+            (make <capability>
+              :true-booleans     true-booleans
+              :false-booleans    false-booleans
+              :available-numbers available-numbers
+              :available-strings available-strings
+              :fetch-capability  (^[sym] (ref table-of-capabilities sym (undefined)))))
+            ))))
   (if (undefined? fallback)
       (%load-termcap-source)
       (guard (_ [else fallback]) (%load-termcap-source))))

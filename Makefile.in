@@ -38,7 +38,8 @@ LOCAL_PATHS = @LOCAL_PATHS@
 PACKAGE     = Gauche-terminal
 SCMTARGET   = terminal/tparm.scm terminal/winsize.scm
 SCIFILES    = terminal/tparm.sci terminal/winsize.sci
-SCMFILES    = terminal.scm terminal/terminfo.scm terminal/termcap.scm
+SCMFILES    = terminal.scm terminal/capability.scm \
+		terminal/terminfo.scm terminal/termcap.scm
 CFILES      = tparm.c winsize.c
 ARCHFILES   = tparm.$(SOEXT) winsize.$(SOEXT)
 TARGET      = $(ARCHFILES)

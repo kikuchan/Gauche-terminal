@@ -16,6 +16,7 @@
 (define-module terminal.terminfo
   (use srfi-11)
   (use srfi-13)
+  (use terminal.capability)
   (export load-terminfo-entry)
   )
 (select-module terminal.terminfo)
@@ -1142,27 +1143,27 @@
         (set! false-booleans (reverse! false-booleans))
         (set! available-numbers (reverse! available-numbers))
         (set! available-strings (reverse! available-strings))
-      
-        (lambda (sym)
-          (case sym
-            [(true-booleans)  true-booleans]
-            [(false-booleans) false-booleans]
-            [(available-numbers)  available-numbers]
-            [(available-strings)  available-strings]
-            [else
-             (let1 syminfo (ref %table-of-capabilities sym #f)
-               (when syminfo
-                 (let ([type  (car syminfo)]
-                       [value (cdr syminfo)])
-                   (let-values ([(vec size)
-                                 (case type
-                                   [(boolean) (values booleans bool-size)]
-                                   [(number)  (values numbers numb-size)]
-                                   [(string)  (values strings stri-size)])])
-                     (if (or (< value 0) (>= value size)) (undefined)
-                         (vector-ref vec value)))
-                   )))]
-            )))))
+
+        (make <capability>
+          :true-booleans     true-booleans
+          :false-booleans    false-booleans
+          :available-numbers available-numbers
+          :available-strings available-strings
+          :fetch-capability
+          (lambda (sym)
+            (let1 syminfo (ref %table-of-capabilities sym #f)
+                  (when syminfo
+                    (let ([type  (car syminfo)]
+                          [value (cdr syminfo)])
+                      (let-values ([(vec size)
+                                    (case type
+                                      [(boolean) (values booleans bool-size)]
+                                      [(number)  (values numbers numb-size)]
+                                      [(string)  (values strings stri-size)])])
+                        (if (or (< value 0) (>= value size)) (undefined)
+                            (vector-ref vec value)))
+                   )))))
+            )))
   (if (undefined? fallback)
       (%load-terminfo-entry)
       (guard (_ [else fallback]) (%load-terminfo-entry))))

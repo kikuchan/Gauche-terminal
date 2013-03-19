@@ -31,7 +31,7 @@ This module contains terminal.* modules.
 ### load-terminal-capability :key term path fallback
 * Common interface of load-terminfo-entry and load-termcap-source.    
 * Default value of 'term' is (sys-getenv "TERM").
-* Type of return value: \<procedure\>, (capability-symbols receiver)
+* Type of return value: \<capability\>. (capability-symbols receiver object)
 
 ```scm
 (define TERM (load-terminal-capability))
