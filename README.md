@@ -13,7 +13,7 @@ Terminal utility library for Gauche.
 % sudo make install
 ```
     
-If you don't have curses or don't want to build tparm,
+If you don't have Ncurses or don't want to build tparm,
 run configure as this:
 ```shell
 % ./configure --disable-tparm
@@ -36,8 +36,8 @@ This module contains terminal.* modules.
 ```scm
 (define TERM (load-terminal-capability))
 
-(TERM 'true-booleans)     ; => get true-booleans  symbol
-(TERM 'false-booleans)    ; => get false-booleans symbol
+(TERM 'true-booleans)     ; => get true-boolean symbols
+(TERM 'false-booleans)    ; => get false-boolean symbols
 (TERM 'available-numbers) ; => get available number symbols
 (TERM 'available-strings) ; => get available string symbols
 (TERM 'clear-screen)  ; => get clear_screen escape sequence
@@ -58,7 +58,7 @@ This module contains terminal.* modules.
 
 
 ## terminal.tparm
-### tparm capability-string [param1 param2 ... param10]
+### tparm capability-string :optional param1 param2 ... param10
 This function is wrapper of GNU Ncurses tparm.
 
 

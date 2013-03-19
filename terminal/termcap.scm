@@ -556,16 +556,17 @@
 (define (%flush-line iport)
   (until ((^[x] (or (char=? x #\newline) (eof-object? x))) (read-char iport))))
 
+(define (string-drop-last s)
+  (string-drop-right s 1))
+
 
 ;;;
 ;;; Get path of Termcap source
 ;;;
 
-(define (%termcap-source-path term :optional fallback)
+(define (%termcap-source-path term)
   (cond [(find file-is-regular? %default-termcap-sources)]
-        [(undefined? fallback)
-         (error #`"Can't find termcap source of ',term'. Please set right $TERMCAP environment variable.")]
-        [else fallback]))
+        [(error #`"Can't find termcap source. Please set right $TERMCAP environment variable.")]))
 
 
 ;;;
@@ -574,20 +575,27 @@
 ;;;
 
 ;; faster version. (hard to read to Schemer)
-(define (%find-selected-term term iport :optional fallback)
+(define (%find-selected-term term iport)
   (let loop ()
     (let1 head (read-char iport)
-      (cond [(eof-object? head) #f]
+      (cond [(eof-object? head)
+             (error #`"Can't find terminal capabilities of ',term'.")]
             [(char-whitespace? head) (loop)]
             [(or (char=? head #\:) (char=? head #\#))
              (begin (%flush-line iport) (loop))]
             [else
-             (let1 terminal-types
-                   (string-split (regexp-replace* #`",head,(read-line iport)"
-                                                  #/^\s*/ ""
-                                                  #/[:\|]?\\$/ "")
-                                 #\|)
-               (if (member term terminal-types) iport ;; fixme (cut rest of terminal-type label)
+             (let1 terminal-types 
+                   (let loop2 ([label (list head)])
+                     (let1 c (read-char iport)
+                       (cond [(eof-object? c) (loop)]
+                             [(char=? c #\:)
+                              (string-split
+                               (regexp-replace-all
+                                #/\\\n\s*/
+                                ($ list->string  $ reverse label) "")
+                               #\|)]
+                             [else (loop2 (cons c label))])))
+               (if (member term terminal-types) iport
                    (loop)))]
             ))))
 
@@ -597,8 +605,58 @@
 ;;;
 
 (define (%escape-code-decode str)
-  ;; fixme
-  )
+  (regexp-replace-all*
+   str
+   #/(^|[^\\])\^@/ "\\1\x00"
+   #/(^|[^\\])\^A/ "\\1\x01"
+   #/(^|[^\\])\^B/ "\\1\x02"
+   #/(^|[^\\])\^C/ "\\1\x03"
+   #/(^|[^\\])\^D/ "\\1\x04"
+   #/(^|[^\\])\^E/ "\\1\x05"
+   #/(^|[^\\])\^F/ "\\1\x06"
+   #/(^|[^\\])\^G/ "\\1\x07"
+   #/(^|[^\\])\^H/ "\\1\x08"
+   #/(^|[^\\])\^I/ "\\1\x09"
+   #/(^|[^\\])\^J/ "\\1\x0a"
+   #/(^|[^\\])\^K/ "\\1\x0b"
+   #/(^|[^\\])\^L/ "\\1\x0c"
+   #/(^|[^\\])\^M/ "\\1\x0d"
+   #/(^|[^\\])\^N/ "\\1\x0e"
+   #/(^|[^\\])\^O/ "\\1\x0f"
+   #/(^|[^\\])\^P/ "\\1\x10"
+   #/(^|[^\\])\^Q/ "\\1\x11"
+   #/(^|[^\\])\^R/ "\\1\x12"
+   #/(^|[^\\])\^S/ "\\1\x13"
+   #/(^|[^\\])\^T/ "\\1\x14"
+   #/(^|[^\\])\^U/ "\\1\x15"
+   #/(^|[^\\])\^V/ "\\1\x16"
+   #/(^|[^\\])\^W/ "\\1\x17"
+   #/(^|[^\\])\^X/ "\\1\x18"
+   #/(^|[^\\])\^Y/ "\\1\x19"
+   #/(^|[^\\])\^Z/ "\\1\x1a"
+   #/(^|[^\\])\^\[/ "\\1\x1b"
+   #/(^|[^\\])\^\\/ "\\1\x1c"
+   #/(^|[^\\])\^\]/ "\\1\x1d"
+   #/(^|[^\\])\^\^/ "\\1\x1e"
+   #/(^|[^\\])\^_/ "\\1\x1f"
+
+   #/(^|[^\\])\\E/ "\\1\x1b"
+   #/(^|[^\\])\\n/ "\\1\x0a"
+   #/(^|[^\\])\\r/ "\\1\x0d"
+   #/(^|[^\\])\\t/ "\\1\x09"
+   #/(^|[^\\])\\b/ "\\1\x08"
+   #/(^|[^\\])\\f/ "\\1\x0c"
+
+   #/(^|[^\\])\\[0-9]{3}/
+   (lambda (x)
+     (string-append (x 1)
+      ($ string $ integer->char
+        (let1 n (string->number (x 2) 8)
+          (if (>= n #o200) (- n #o200) n)))))
+   
+   #/\\\\/ "\\"
+   #/\\\^/ "^"
+   ))
 
 
 ;;;
@@ -623,11 +681,19 @@
 ;;;
 
 (define (%parse-capability iport)
+  (define (append-backslash lst) ; for "\\:"
+    (cond [(null? lst) '()]
+          [(and (rxmatch #/(^|[^\\\^])\\$/ (car lst)) (pair? (cdr lst)))
+           (cons (string-append (string-drop-last (car lst)) (cadr lst))
+                 (append-backslash (cddr lst)))]
+          [(cons (car lst) (append-backslash (cdr lst)))]))
   (let loop ([capinfo '()])
     (let* ([line (read-line iport)]
-           [cap-line (regexp-replace* line #/^\s*:/ "" #/:?\\?$/ "")])
-      (let1 capinfo (append capinfo (string-split cap-line #[:])) ; fixme (for "\\:")
-        (if (string-suffix? "\\" line)
+           [cap-line (regexp-replace* line #/^\s*:/ "" #/:?\\?$/ "" #/^#.*$/ "")])
+      (let1 capinfo (append capinfo 
+                            ($ append-backslash $ remove string-null? ; for #/^\\$/ of the head
+                                                $ string-split cap-line #[:]))
+            (if (or (string-suffix? "\\" line) (string-prefix? "#" line))
             (loop capinfo)
             (map %split-capinfo capinfo)))
       )))
@@ -635,7 +701,6 @@
 
 ;;;
 ;;; <caplst> := (cap ...)
-;;; <cap> := tcap-symbol | (tcap-symbol value)
 ;;;
 ;;; %class-separation :: caplst -> (values true-list number-alist string-alist)
 ;;;
@@ -648,9 +713,36 @@
            [(symbol? head) ; boolean
             (loop (cons head trues) numbers strings (cdr rest))]
            [(number? (cdr head)) ; number 
-            (loop trues (cons head number) strings (cdr rest))]
+            (loop trues (cons head numbers) strings (cdr rest))]
            [else ; string
-            (loop trues number (cons head strings) (cdr rest))])))))
+            (loop trues numbers (cons head strings) (cdr rest))])))))
+
+
+;;;
+;;; Fetch terminal capabilities of term, from file. Return caplst.
+
+(define (%fetch-terminal-capability term file)
+  (let* ([iport (open-input-file file)]
+         [source (%find-selected-term term iport)]
+         [caplst (%parse-capability source)])
+    (if (pair? caplst)
+        (let* ([rev (reverse caplst)]
+               [lastobj (car rev)])
+          (if (and (pair? lastobj) (eq? (car lastobj) 'tc))
+              ;; recursive loading
+              (let1 cancel
+                    (map ($ string->symbol $ xstring-drop-right $ symbol->string $)
+                      (take-while
+                       (^[obj] (and (symbol? obj)
+                                    (string-suffix? "@" (symbol->string obj))))
+                       (cdr rev)))
+                (append (drop-right caplst (+ (length cancel) 1))
+                  (remove
+                   (^[cap] (memq (if (symbol? cap) cap (car cap)) cancel))
+                   (%fetch-terminal-capability (cdr lastobj) file))))
+              caplst))
+        caplst
+        )))
 
 
 ;;;
@@ -658,42 +750,43 @@
 ;;;
 
 (define (load-termcap-source :key (term (sys-getenv "TERM")) path fallback)
-  (call/cc (lambda (return)
-  (let* ([file-path
-          (cond [($ not $ undefined? path) path]
-                [(undefined? fallback) (%termcap-source-path (x->string term))]
-                [(%termcap-source-path (x->string term) #f)]
-                [(return fallback)])]
-         [source (open-input-file (x->string file-path))]
-         [caplst ($ %parse-capability $ %find-selected-term term source)]) ; fixme (add support tcap-tc)
-    (let-values ([(trues-tcap numbers-tcap strings-tcap) (%class-separation caplst)])
-      (let ([numbers-alist
-             (filter-map (^[dotlist]
-                           (cond [(ref %table-of-numbers (car tcap) #f) => (cut cons <> (cdr tcap))]
-                                 [else #f])) numbers-tcap)]
-            [strings-alist
-             (filter-map (^[dotlist]
-                           (cond [(ref %table-of-strings (car dotlist) #f) => (cut cons <> (cdr dotlist))]
-                                 [else #f])) strings-tcap)]
-            [available-numbers (map car numbers-alist)]
-            [available-strings (map car strings-alist)]
-            [capability-alist (append numbers-alist strings-alist)]
-            [true-booleans '()]
-            [false-booleans '()])
-        (hash-table-for-each %table-of-booleans
-          (^[sym tcap] (if (memq tcap trues)
-                           (begin (push! sym true-booleans)
-                                  (push! (cons sym #t) capability-alist))
-                           (begin (push! sym false-booleans)
-                                  (push! (cons sym #f) capability-alist))
-                                  )))
-        (let1 table-of-capabilities (alist->hash-table capability-alist)
-          (lambda (sym)
-            (case sym
-              [(true-booleans)  true-booleans]
-              [(false-booleans) false-booleans]
-              [(available-numbers)  available-numbers]
-              [(available-strings)  available-strings]
-              [else (ref table-of-capabilities sym (undefined))]))
-          )))))))
-
+  (define (%load-termcap-source)
+    (let* ([term (x->string term)]
+           [path (x->string
+                 (if (undefined? path) (%termcap-source-path term) path))]
+           [caplst (%fetch-terminal-capability term path)])
+      (let-values ([(trues-tcap numbers-tcap strings-tcap) (%class-separation caplst)])
+        (let* ([numbers-alist
+                (filter-map (^[dotlist]
+                              (cond [(ref %table-of-numbers (car dotlist) #f)
+                                     => (cut cons <> (cdr dotlist))]
+                                    [else #f])) numbers-tcap)]
+               [strings-alist
+                (filter-map (^[dotlist]
+                              (cond [(ref %table-of-strings (car dotlist) #f)
+                                     => (cut cons <> (cdr dotlist))]
+                                    [else #f])) strings-tcap)]
+               [available-numbers (map car numbers-alist)]
+               [available-strings (map car strings-alist)]
+               [capability-alist (append numbers-alist strings-alist)]
+               [true-booleans '()]
+               [false-booleans '()])
+          (hash-table-for-each %table-of-booleans
+            (^[sym tcap] (if (memq tcap trues-tcap)
+                             (begin (push! true-booleans sym)
+                                    (push! capability-alist (cons sym #t)))
+                             (begin (push! false-booleans sym)
+                                    (push! capability-alist (cons sym #f)))
+                             )))
+          (let1 table-of-capabilities (alist->hash-table capability-alist)
+            (lambda (sym)
+              (case sym
+                [(true-booleans)  true-booleans]
+                [(false-booleans) false-booleans]
+                [(available-numbers)  available-numbers]
+                [(available-strings)  available-strings]
+                [else (ref table-of-capabilities sym (undefined))]))
+            )))))
+  (if (undefined? fallback)
+      (%load-termcap-source)
+      (guard (_ [else fallback]) (%load-termcap-source))))

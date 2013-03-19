@@ -4,7 +4,7 @@ dnl  process this file with autoconf to generate 'configure'.
 dnl
 
 AC_PREREQ(2.54)
-AC_INIT(Gauche-terminal, 0.00, walter@wasao.org,
+AC_INIT(Gauche-terminal, 0.01, walter@wasao.org,
         [], http://github.com/wasao/Gauche-terminal)
 AC_CONFIG_HEADERS(config.h)
 dnl If you want to use the system name (OS, architecture, etc) in the

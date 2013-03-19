@@ -1071,12 +1071,10 @@
 ;;; Get path of Terminfo entry
 ;;;
 
-(define (%terminfo-entry-path term :optional fallback)
+(define (%terminfo-entry-path term)
   (let ([dir->path (cut string-append <> #`"/,(~ term 0)/,term")])
     (cond [(find file-is-regular? (map dir->path %default-terminfo-directories))]
-          [(undefined? fallback)
-           (error #`"Can't find terminfo entry of ',term'. Please set right $TERMINFO environment variable.")]
-          [else fallback])))
+          [(error #`"Can't find terminfo entry of ',term'. Please set right $TERMINFO environment variable.")])))
 
 
 ;;; 
@@ -1085,85 +1083,86 @@
 
 ;; thanks http://users.actrix.co.nz/mycroft/terminfo.lisp
 (define (load-terminfo-entry :key (term (sys-getenv "TERM")) path fallback)
-  (call/cc (lambda (return)
-  (let* ([file-path
-          (cond [($ not $ undefined? path) path]
-                [(undefined? fallback) (%terminfo-entry-path (x->string term))]
-                [(%terminfo-entry-path (x->string term) #f)]
-                [(return fallback)])]
-         [entry (open-input-file (x->string file-path))])
-    (unless (= #x011a (%read-short entry))
-            (if (undefined? fallback)
-                (error "Invalid file signature.") (return fallback)))
-    (let* ([name-size (%read-short entry)]
-           [bool-size (%read-short entry)]
-           [numb-size (%read-short entry)]
-           [stri-size (%read-short entry)]
-           [strt-size (%read-short entry)]
-           [name      (read-block name-size entry)]
-           [booleans     (make-vector bool-size #f)]
-           [numbers      (make-vector numb-size -1)]
-           [strings      (make-vector stri-size -1)]
-           [stringtable  (make-string strt-size #\null)]
-           [true-booleans  '()]
-           [false-booleans '()]
-           [available-numbers '()]
-           [available-strings '()])
-      ;; load
-      (dotimes (i bool-size)
-               (vector-set! booleans i (%integer->boolean (read-byte entry))))
-      ;; Between the boolean section and the number section, a null byte will be inserted,
-      ;; if necessary, to ensure that the number section begins on an even byte.
-      ;; http://dell9.ma.utexas.edu/cgi-bin/man-cgi?term
-      (when (odd? (+ name-size bool-size)) (read-byte entry))
-      (dotimes (i numb-size)
-               (vector-set! numbers i (%read-short entry)))
-      (dotimes (i stri-size)
-               (vector-set! strings i (%read-short entry)))
-      (dotimes (i strt-size)
-               (string-set! stringtable i (integer->char (read-byte entry))))
+  (define (%load-terminfo-entry)
+    (let* ([term (x->string term)]
+           [path (x->string
+                 (if (undefined? path)
+                     (%terminfo-entry-path term) path))]
+           [entry (open-input-file path)])
+      (unless (= #x011a (%read-short entry))
+        (error "Invalid file signature."))
+      (let* ([name-size (%read-short entry)]
+             [bool-size (%read-short entry)]
+             [numb-size (%read-short entry)]
+             [stri-size (%read-short entry)]
+             [strt-size (%read-short entry)]
+             [name      (read-block name-size entry)]
+             [booleans     (make-vector bool-size #f)]
+             [numbers      (make-vector numb-size -1)]
+             [strings      (make-vector stri-size -1)]
+             [stringtable  (make-string strt-size #\null)]
+             [true-booleans  '()]
+             [false-booleans '()]
+             [available-numbers '()]
+             [available-strings '()])
+        ;; load
+        (dotimes (i bool-size)
+          (vector-set! booleans i (%integer->boolean (read-byte entry))))
+        ;; Between the boolean section and the number section, a null byte will be inserted,
+        ;; if necessary, to ensure that the number section begins on an even byte.
+        ;; http://dell9.ma.utexas.edu/cgi-bin/man-cgi?term
+        (when (odd? (+ name-size bool-size)) (read-byte entry))
+        (dotimes (i numb-size)
+          (vector-set! numbers i (%read-short entry)))
+        (dotimes (i stri-size)
+          (vector-set! strings i (%read-short entry)))
+        (dotimes (i strt-size)
+          (string-set! stringtable i (integer->char (read-byte entry))))
 
-      ;; set availability-list or modify each vector
-      (dotimes (i bool-size)
-               (if (vector-ref booleans i)
-                   (push! true-booleans  (ref %table-of-booleans i #f))
-                   (push! false-booleans (ref %table-of-booleans i #f))))
-      (dotimes (i numb-size)
-               (if (positive? (vector-ref numbers i))
-                   (push! available-numbers (ref %table-of-numbers i #f))
-                   (vector-set! numbers i #f)))
-      (dotimes (i stri-size)
-               (if ($ positive? $ vector-ref strings i)
-                   (let* ([start (vector-ref strings i)]
-                          [end (string-index stringtable #\null
-                                             start strt-size)])
-                     (vector-set! strings i
-                                  (substring stringtable start end))
-                     (push! available-strings (ref %table-of-strings i #f)))
-                   (vector-set! strings i #f)))
+        ;; set availability-list or modify each vector
+        (dotimes (i bool-size)
+          (if (vector-ref booleans i)
+              (push! true-booleans  (ref %table-of-booleans i #f))
+              (push! false-booleans (ref %table-of-booleans i #f))))
+        (dotimes (i numb-size)
+          (if (positive? (vector-ref numbers i))
+              (push! available-numbers (ref %table-of-numbers i #f))
+              (vector-set! numbers i #f)))
+        (dotimes (i stri-size)
+          (if ($ positive? $ vector-ref strings i)
+              (let* ([start (vector-ref strings i)]
+                     [end (string-index stringtable #\null
+                                        start strt-size)])
+                (vector-set! strings i
+                             (substring stringtable start end))
+                (push! available-strings (ref %table-of-strings i #f)))
+              (vector-set! strings i #f)))
 
-      (set! true-booleans  (reverse! true-booleans))
-      (set! false-booleans (reverse! false-booleans))
-      (set! available-numbers (reverse! available-numbers))
-      (set! available-strings (reverse! available-strings))
+        (set! true-booleans  (reverse! true-booleans))
+        (set! false-booleans (reverse! false-booleans))
+        (set! available-numbers (reverse! available-numbers))
+        (set! available-strings (reverse! available-strings))
       
-      (lambda (sym)
-        (case sym
-          [(true-booleans)  true-booleans]
-          [(false-booleans) false-booleans]
-          [(available-numbers)  available-numbers]
-          [(available-strings)  available-strings]
-          [else
-           (let1 syminfo (ref %table-of-capabilities sym #f)
-             (when syminfo
-               (let ([type  (car syminfo)]
-                     [value (cdr syminfo)])
-                 (let-values ([(vec size)
-                               (case type
-                                 [(boolean) (values booleans bool-size)]
-                                 [(number)  (values numbers numb-size)]
-                                 [(string)  (values strings stri-size)])])
-                   (if (or (< value 0) (>= value size)) (undefined)
-                       (vector-ref vec value)))
-                 )))]
-          )))))))
+        (lambda (sym)
+          (case sym
+            [(true-booleans)  true-booleans]
+            [(false-booleans) false-booleans]
+            [(available-numbers)  available-numbers]
+            [(available-strings)  available-strings]
+            [else
+             (let1 syminfo (ref %table-of-capabilities sym #f)
+               (when syminfo
+                 (let ([type  (car syminfo)]
+                       [value (cdr syminfo)])
+                   (let-values ([(vec size)
+                                 (case type
+                                   [(boolean) (values booleans bool-size)]
+                                   [(number)  (values numbers numb-size)]
+                                   [(string)  (values strings stri-size)])])
+                     (if (or (< value 0) (>= value size)) (undefined)
+                         (vector-ref vec value)))
+                   )))]
+            )))))
+  (if (undefined? fallback)
+      (%load-terminfo-entry)
+      (guard (_ [else fallback]) (%load-terminfo-entry))))
