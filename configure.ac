@@ -57,15 +57,6 @@ AC_SUBST(GAUCHE_PKGLIBDIR)
 AC_SUBST(GAUCHE_PKGARCHDIR)
 AC_SUBST(GAUCHE_SYSLIBDIR)
 
-dnl Check for headers.
-dnl Add your macro calls to check required headers, if you have any.
-
-dnl Check for other programs.
-dnl Add your macro calls to check existence of programs, if you have any.
-
-dnl Check for libraries
-dnl Add your macro calls to check required libraries, if you have any.
-
 dnl Creating gpd (gauche package description) file
 GAUCHE_PACKAGE_CONFIGURE_ARGS="`echo ""$ac_configure_args"" | sed 's/[\\""\`\$]/\\\&/g'`"
 AC_MSG_NOTICE([creating ${PACKAGE_NAME}.gpd])
@@ -85,9 +76,8 @@ AS_IF([test "x$enable_tparm" != xno],
 dnl
 dnl Check for Ncurses libraries
 dnl
-dnl PKG_CHECK_MODULES(NCURSES, [ncurses])
-NCURSES_CFLAGS="`pkg-config --cflags ncurses`"
-NCURSES_LIBS="`pkg-config --libs ncurses`"
+NCURSES_CFLAGS="`ncurses5-config --cflags 2>/dev/null`"
+NCURSES_LIBS="`ncurses5-config --libs 2>/dev/null`"
 AC_SUBST(NCURSES_CFLAGS)
 AC_SUBST(NCURSES_LIBS)
 
