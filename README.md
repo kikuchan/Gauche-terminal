@@ -3,7 +3,7 @@ Terminal utility library for Gauche.
 
 ## Requirements
 * Gauche 0.9 or later
-* Ncurses-5.\* (if you want to use tparm)
+* Ncurses (if you want to use tparm)
 
 ## Building from tarball
 ```shell

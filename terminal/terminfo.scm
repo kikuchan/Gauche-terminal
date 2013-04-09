@@ -1073,8 +1073,10 @@
 ;;;
 
 (define (%terminfo-entry-path term)
-  (let ([dir->path (cut string-append <> #`"/,(~ term 0)/,term")])
-    (cond [(find file-is-regular? (map dir->path %default-terminfo-directories))]
+  (let ([dir->path1 (cut string-append <> #`"/,(~ term 0)/,term")]
+        [dir->path2 (cut string-append <> #`"/,(number->string (char->integer (~ term 0)) 16)/,term")])
+    (cond [(find file-is-regular? (map dir->path1 %default-terminfo-directories))]
+          [(find file-is-regular? (map dir->path2 %default-terminfo-directories))]
           [(error #`"Can't find terminfo entry of ',term'. Please set right $TERMINFO environment variable.")])))
 
 

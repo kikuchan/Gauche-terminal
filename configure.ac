@@ -76,8 +76,8 @@ AS_IF([test "x$enable_tparm" != xno],
 dnl
 dnl Check for Ncurses libraries
 dnl
-NCURSES_CFLAGS="`ncurses5-config --cflags 2>/dev/null`"
-NCURSES_LIBS="`ncurses5-config --libs 2>/dev/null`"
+NCURSES_CFLAGS=""
+NCURSES_LIBS="-lncurses"
 AC_SUBST(NCURSES_CFLAGS)
 AC_SUBST(NCURSES_LIBS)
 
