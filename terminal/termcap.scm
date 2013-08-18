@@ -720,9 +720,10 @@
 ;;; Fetch terminal capabilities of term, from file. Return caplst.
 
 (define (%fetch-terminal-capability term file)
-  (let* ([iport (open-input-file file)]
-         [source (%find-selected-term term iport)]
-         [caplst (%parse-capability source)])
+  (let1 caplst
+    (call-with-input-file file
+      (lambda (iport)
+        (%parse-capability (%find-selected-term term iport))))
     (if (pair? caplst)
         (let* ([rev (reverse caplst)]
                [lastobj (car rev)])
