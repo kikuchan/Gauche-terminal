@@ -752,7 +752,7 @@
     (let* ([term (x->string term)]
            [path (x->string
                  (if (undefined? path) (%termcap-source-path term) path))]
-           [caplst (%fetch-terminal-capability term path)])
+           [caplst (delete-duplicates (%fetch-terminal-capability term path) (^[a b] (if (and (pair? a) (pair? b)) (equal? (car a) (car b)) (equal? a b))))])
       (let-values ([(trues-tcap numbers-tcap strings-tcap) (%class-separation caplst)])
         (let* ([numbers-alist
                 (filter-map (^[dotlist]
